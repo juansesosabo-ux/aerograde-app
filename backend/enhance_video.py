@@ -2,33 +2,17 @@
 Video color-grading engine for drone footage, using the same philosophy as
 enhance_photo.py: gentle contrast, restrained/protected saturation via
 vibrance, subtle warm-highlight/cool-shadow split tone, light denoise,
-and mild sharpening. Implemented as an FFmpeg filter chain so it scales to
-any resolution/frame rate without decoding frames in Python.
+and mild sharpening. Implemented as an FFmpeg filter chain.
+
+Uses CRF-based encoding with a bitrate cap instead of forcing a fixed
+average bitrate - lighter on CPU/RAM, which matters on smaller hosting
+plans, while still preserving visual quality.
 
 intensity: 0-200, 100 = the default look approved by the user.
 warmth: -50..50, 0 = neutral.
 """
 
 import subprocess
-import shlex
-
-
-def _probe_bitrate(path_in: str) -> int:
-    """Return the source video bitrate in bits/s, so the output encode can
-    match it instead of using a fixed value (a fixed low bitrate is what
-    caused visible quality loss during testing)."""
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=bit_rate",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        path_in,
-    ]
-    try:
-        out = subprocess.check_output(cmd).decode().strip()
-        return int(out)
-    except Exception:
-        return 12_000_000  # sane fallback: ~12 Mbps
 
 
 def build_filter_chain(intensity: float = 100, warmth: float = 0) -> str:
@@ -57,22 +41,21 @@ def build_filter_chain(intensity: float = 100, warmth: float = 0) -> str:
 
 def enhance_video(path_in: str, path_out: str, intensity: float = 100, warmth: float = 0):
     filter_chain = build_filter_chain(intensity, warmth)
-    source_bitrate = _probe_bitrate(path_in)
-    target_bitrate = max(8_000_000, min(source_bitrate, 40_000_000))
 
     cmd = [
         "ffmpeg", "-y",
         "-i", path_in,
         "-vf", filter_chain,
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-b:v", str(target_bitrate),
-        "-maxrate", str(int(target_bitrate * 1.5)),
-        "-bufsize", str(int(target_bitrate * 2)),
+        "-preset", "veryfast",
+        "-crf", "19",
+        "-maxrate", "12000000",
+        "-bufsize", "24000000",
+        "-threads", "2",
         "-c:a", "copy",
         path_out,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed: {result.stderr[-2000:]}")
+        raise RuntimeError(f"ffmpeg failed (code {result.returncode}): {result.stderr[-1500:]}")
     return path_out
