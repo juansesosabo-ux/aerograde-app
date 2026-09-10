@@ -55,6 +55,10 @@ async def enhance(
             media_type = "video/mp4"
         else:
             raise HTTPException(status_code=400, detail=f"Formato no soportado: {ext}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
     finally:
         if os.path.exists(in_path):
             os.remove(in_path)
