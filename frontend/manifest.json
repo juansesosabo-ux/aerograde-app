@@ -1,0 +1,11 @@
+{
+  "name": "AeroGrade",
+  "short_name": "AeroGrade",
+  "description": "Edición de color automática para fotos y video de dron",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "orientation": "portrait",
+  "icons": []
+}
