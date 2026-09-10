@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AeroGrade</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1220">
+<style>
+  :root {
+    --surface-1: #0b1220;
+    --surface-2: #151f30;
+    --border: #263248;
+    --border-accent: #4f7fd6;
+    --text-primary: #f2f4f8;
+    --text-secondary: #93a0b4;
+    --text-accent: #6f9cf2;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input[type="range"] { accent-color: var(--text-accent); }
+
+  .app {
+    max-width: 420px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: var(--surface-2);
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: env(safe-area-inset-top, 16px) 16px 8px;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-accent); }
+
+  .preview {
+    margin: 8px 16px 0;
+    position: relative;
+    aspect-ratio: 4/3;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #1c273b;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .preview img, .preview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .after-clip { position: absolute; inset: 0; overflow: hidden; border-right: 2px solid white; }
+  .after-clip > * { position: absolute; inset: 0; width: var(--clip-width, 380px); height: 100%; object-fit: cover; }
+  .badge { position: absolute; top: 8px; font-size: 11px; font-weight: 500; color: white; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 20px; }
+  .compare-slider { position: absolute; bottom: 10px; left: 8px; right: 8px; width: calc(100% - 16px); margin: 0; }
+
+  .controls { padding: 16px; }
+  .segmented { display: flex; background: var(--surface-1); border-radius: var(--radius); padding: 3px; margin-bottom: 16px; }
+  .segmented button { flex: 1; padding: 8px; font-size: 13px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-weight: 500; }
+  .segmented button.active { background: var(--surface-2); color: var(--text-primary); }
+
+  .manual-controls { display: none; margin-bottom: 16px; }
+  .manual-controls.visible { display: block; }
+  .slider-row { margin-bottom: 12px; }
+  .slider-row .row-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }
+  .slider-row .row-label strong { color: var(--text-primary); font-weight: 500; }
+  .slider-row input { width: 100%; }
+
+  .actions { display: flex; gap: 8px; }
+  .actions button {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 12px; font-size: 14px; border-radius: var(--radius); border: none;
+    background: var(--text-accent); color: white; font-weight: 500;
+  }
+  .actions button.secondary { background: transparent; border: 1px solid var(--border-accent); color: var(--text-accent); }
+  .actions button:disabled { opacity: 0.5; }
+
+  #fileInput { display: none; }
+  .status { text-align: center; font-size: 13px; color: var(--text-secondary); padding: 0 16px 12px; min-height: 18px; }
+
+  .bottomnav { display: flex; justify-content: space-around; padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 0.5px solid var(--border); margin-top: auto; }
+  .bottomnav span { color: var(--text-secondary); font-size: 20px; }
+  .bottomnav span.active { color: var(--text-accent); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span> AeroGrade</div>
+  </div>
+
+  <div class="preview" id="previewBox">
+    Sube una foto o video de dron para empezar
+  </div>
+
+  <div class="controls">
+    <div class="segmented">
+      <button id="btnAuto" class="active">Automático</button>
+      <button id="btnManual">Manual</button>
+    </div>
+
+    <div class="manual-controls" id="manualControls">
+      <div class="slider-row">
+        <div class="row-label"><span>Intensidad</span><strong id="intensityOut">100%</strong></div>
+        <input id="intensitySlider" type="range" min="0" max="200" value="100" step="5">
+      </div>
+      <div class="slider-row">
+        <div class="row-label"><span>Calidez</span><strong id="warmthOut">Neutra</strong></div>
+        <input id="warmthSlider" type="range" min="-50" max="50" value="0" step="5">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btnUpload">Subir</button>
+      <button id="btnDownload" class="secondary" disabled>Descargar</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <input type="file" id="fileInput" accept="image/jpeg,image/png,video/mp4,video/quicktime">
+
+  <div class="bottomnav">
+    <span class="active">&#9679;</span>
+    <span>&#9633;</span>
+    <span>&#9698;</span>
+    <span>&#9678;</span>
+  </div>
+</div>
+
+<script>
+const API_URL = "";
+
+const previewBox = document.getElementById('previewBox');
+const fileInput = document.getElementById('fileInput');
+const btnUpload = document.getElementById('btnUpload');
+const btnDownload = document.getElementById('btnDownload');
+const statusEl = document.getElementById('status');
+
+const btnAuto = document.getElementById('btnAuto');
+const btnManual = document.getElementById('btnManual');
+const manualControls = document.getElementById('manualControls');
+const intensitySlider = document.getElementById('intensitySlider');
+const intensityOut = document.getElementById('intensityOut');
+const warmthSlider = document.getElementById('warmthSlider');
+const warmthOut = document.getElementById('warmthOut');
+
+let selectedFile = null;
+let resultBlobUrl = null;
+let resultFilename = null;
+
+btnAuto.addEventListener('click', () => setMode('auto'));
+btnManual.addEventListener('click', () => setMode('manual'));
+
+function setMode(mode) {
+  const isAuto = mode === 'auto';
+  btnAuto.classList.toggle('active', isAuto);
+  btnManual.classList.toggle('active', !isAuto);
+  manualControls.classList.toggle('visible', !isAuto);
+  if (isAuto) {
+    intensitySlider.value = 100;
+    warmthSlider.value = 0;
+    intensityOut.textContent = '100%';
+    warmthOut.textContent = 'Neutra';
+  }
+}
+
+intensitySlider.addEventListener('input', () => {
+  intensityOut.textContent = intensitySlider.value + '%';
+});
+warmthSlider.addEventListener('input', () => {
+  const v = parseInt(warmthSlider.value, 10);
+  warmthOut.textContent = v === 0 ? 'Neutra' : (v > 0 ? '+' + v + ' cálida' : v + ' fría');
+});
+
+btnUpload.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', () => {
+  if (!fileInput.files.length) return;
+  selectedFile = fileInput.files[0];
+  showOriginalPreview(selectedFile);
+  processFile();
+});
+
+function showOriginalPreview(file) {
+  previewBox.innerHTML = '';
+  const url = URL.createObjectURL(file);
+  const el = file.type.startsWith('video/') ? document.createElement('video') : document.createElement('img');
+  if (el.tagName === 'VIDEO') { el.muted = true; el.loop = true; el.autoplay = true; el.playsInline = true; }
+  el.src = url;
+  previewBox.appendChild(el);
+}
+
+async function processFile() {
+  if (!selectedFile) return;
+  statusEl.textContent = 'Procesando...';
+  btnDownload.disabled = true;
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('intensity', intensitySlider.value);
+  formData.append('warmth', warmthSlider.value);
+
+  try {
+    const res = await fetch(`${API_URL}/api/enhance`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error procesando el archivo');
+    }
+    const blob = await res.blob();
+    resultBlobUrl = URL.createObjectURL(blob);
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    resultFilename = match ? match[1] : ('editado_' + selectedFile.name);
+
+    showComparePreview(selectedFile, resultBlobUrl, selectedFile.type.startsWith('video/'));
+    btnDownload.disabled = false;
+    statusEl.textContent = 'Listo';
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function showComparePreview(originalFile, resultUrl, isVideo) {
+  previewBox.innerHTML = '';
+  const originalUrl = URL.createObjectURL(originalFile);
+  const tag = isVideo ? 'video' : 'img';
+
+  const originalEl = document.createElement(tag);
+  originalEl.src = originalUrl;
+  if (isVideo) { originalEl.muted = true; originalEl.loop = true; originalEl.autoplay = true; originalEl.playsInline = true; }
+
+  const afterClip = document.createElement('div');
+  afterClip.className = 'after-clip';
+  afterClip.style.setProperty('--clip-width', previewBox.clientWidth + 'px');
+  const resultEl = document.createElement(tag);
+  resultEl.src = resultUrl;
+  if (isVideo) { resultEl.muted = true; resultEl.loop = true; resultEl.autoplay = true; resultEl.playsInline = true; }
+  afterClip.appendChild(resultEl);
+
+  const badgeAfter = document.createElement('div');
+  badgeAfter.className = 'badge'; badgeAfter.style.left = '10px'; badgeAfter.textContent = 'Después';
+  const badgeBefore = document.createElement('div');
+  badgeBefore.className = 'badge'; badgeBefore.style.right = '10px'; badgeBefore.textContent = 'Original';
+
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.min = 0; slider.max = 100; slider.value = 55;
+  slider.className = 'compare-slider';
+  slider.addEventListener('input', () => {
+    const pct = slider.value + '%';
+    afterClip.style.width = pct;
+    afterClip.style.setProperty('--clip-width', previewBox.clientWidth + 'px');
+  });
+
+  previewBox.appendChild(originalEl);
+  previewBox.appendChild(afterClip);
+  afterClip.style.width = '55%';
+  previewBox.appendChild(badgeAfter);
+  previewBox.appendChild(badgeBefore);
+  previewBox.appendChild(slider);
+}
+
+btnDownload.addEventListener('click', () => {
+  if (!resultBlobUrl) return;
+  const a = document.createElement('a');
+  a.href = resultBlobUrl;
+  a.download = resultFilename || 'editado';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
